@@ -1,4 +1,17 @@
+// ============================================================
+// SOS GUARDIAN — USER APP
+// ============================================================
+
+// ============================================================
+// SOCKET.IO
+// ============================================================
+
 const socket = io("https://sos-guardian-backend.onrender.com");
+
+
+// ============================================================
+// GLOBAL STATE
+// ============================================================
 
 let sosActive = false;
 let emergencyLocked = false;
@@ -6,6 +19,16 @@ let emergencyLocked = false;
 let localStream = null;
 let peerConnection = null;
 let locationWatchId = null;
+
+let wakeLock = null;
+
+// ICE candidates received before remote description
+let pendingIceCandidates = [];
+
+
+// ============================================================
+// WEBRTC CONFIG
+// ============================================================
 
 const RTC_CONFIG = {
     iceServers: [
@@ -15,9 +38,10 @@ const RTC_CONFIG = {
     ]
 };
 
-// =====================================
+
+// ============================================================
 // ELEMENTS
-// =====================================
+// ============================================================
 
 const sosButton =
     document.getElementById("sosButton");
@@ -46,9 +70,10 @@ const audioStatus =
 const responderStatus =
     document.getElementById("responderStatus");
 
-// =====================================
-// INDICATOR ELEMENTS
-// =====================================
+
+// ============================================================
+// STATUS ITEMS
+// ============================================================
 
 const statusItems = {
 
@@ -65,14 +90,14 @@ const statusItems = {
         responderStatus?.closest(".status-item")
 };
 
-// =====================================
+
+// ============================================================
 // INDICATOR HELPER
-// =====================================
+// ============================================================
 
 function setIndicator(type, state, message) {
 
-    const item =
-        statusItems[type];
+    const item = statusItems[type];
 
     const statusElement = {
 
@@ -94,36 +119,24 @@ function setIndicator(type, state, message) {
     );
 
     if (state === "active") {
-
-        item.classList.add(
-            "active"
-        );
-
+        item.classList.add("active");
     }
 
     if (state === "waiting") {
-
-        item.classList.add(
-            "waiting"
-        );
-
+        item.classList.add("waiting");
     }
 
     if (state === "error") {
-
-        item.classList.add(
-            "error"
-        );
-
+        item.classList.add("error");
     }
 
-    statusElement.textContent =
-        message;
+    statusElement.textContent = message;
 }
 
-// =====================================
-// INITIAL INDICATORS
-// =====================================
+
+// ============================================================
+// INITIAL STATUS
+// ============================================================
 
 setIndicator(
     "location",
@@ -149,73 +162,207 @@ setIndicator(
     "Not connected"
 );
 
-// =====================================
-// SOCKET CONNECTION
-// =====================================
 
-socket.on("connect", () => {
+// ============================================================
+// SCREEN WAKE LOCK
+// ============================================================
 
-    console.log(
-        "🟢 USER SOCKET CONNECTED:",
-        socket.id
-    );
+async function requestWakeLock() {
 
-    if (connectionStatus) {
+    if (!("wakeLock" in navigator)) {
 
-        connectionStatus.textContent =
-            "● Connected";
-
-        connectionStatus.classList.remove(
-            "offline"
+        console.warn(
+            "SCREEN WAKE LOCK NOT SUPPORTED"
         );
 
-        connectionStatus.classList.add(
-            "online"
-        );
-    }
-});
-
-socket.on("disconnect", () => {
-
-    console.log(
-        "🔴 USER SOCKET DISCONNECTED"
-    );
-
-    if (connectionStatus) {
-
-        connectionStatus.textContent =
-            "● Offline";
-
-        connectionStatus.classList.remove(
-            "online"
-        );
-
-        connectionStatus.classList.add(
-            "offline"
-        );
+        return false;
     }
 
-    if (sosActive) {
-
-        setIndicator(
-            "responder",
-            "error",
-            "Connection lost"
-        );
-
-    } else {
-
-        setIndicator(
-            "responder",
-            "waiting",
-            "Not connected"
-        );
+    if (
+        !sosActive ||
+        document.visibilityState !== "visible"
+    ) {
+        return false;
     }
-});
 
-// =====================================
+    try {
+
+        if (
+            wakeLock &&
+            !wakeLock.released
+        ) {
+            return true;
+        }
+
+        wakeLock =
+            await navigator.wakeLock.request("screen");
+
+        console.log(
+            "SCREEN WAKE LOCK ACTIVE"
+        );
+
+        wakeLock.addEventListener(
+            "release",
+            () => {
+
+                console.log(
+                    "SCREEN WAKE LOCK RELEASED"
+                );
+
+                wakeLock = null;
+            }
+        );
+
+        return true;
+
+    } catch (error) {
+
+        console.warn(
+            "WAKE LOCK REQUEST FAILED:",
+            error
+        );
+
+        wakeLock = null;
+
+        return false;
+    }
+}
+
+
+// ============================================================
+// RELEASE WAKE LOCK
+// ============================================================
+
+async function releaseWakeLock() {
+
+    if (!wakeLock) {
+        return;
+    }
+
+    try {
+
+        await wakeLock.release();
+
+        console.log(
+            "SCREEN WAKE LOCK RELEASED"
+        );
+
+    } catch (error) {
+
+        console.warn(
+            "WAKE LOCK RELEASE ERROR:",
+            error
+        );
+
+    } finally {
+
+        wakeLock = null;
+    }
+}
+
+
+// ============================================================
+// VISIBILITY CHANGE
+// ============================================================
+
+document.addEventListener(
+    "visibilitychange",
+    async () => {
+
+        if (
+            document.visibilityState === "visible" &&
+            sosActive
+        ) {
+
+            console.log(
+                "PAGE VISIBLE — CHECKING WAKE LOCK"
+            );
+
+            await requestWakeLock();
+        }
+    }
+);
+
+
+// ============================================================
+// SOCKET CONNECT
+// ============================================================
+
+socket.on(
+    "connect",
+    () => {
+
+        console.log(
+            "USER SOCKET CONNECTED:",
+            socket.id
+        );
+
+        if (connectionStatus) {
+
+            connectionStatus.textContent =
+                "● Connected";
+
+            connectionStatus.classList.remove(
+                "offline"
+            );
+
+            connectionStatus.classList.add(
+                "online"
+            );
+        }
+    }
+);
+
+
+// ============================================================
+// SOCKET DISCONNECT
+// ============================================================
+
+socket.on(
+    "disconnect",
+    () => {
+
+        console.log(
+            "USER SOCKET DISCONNECTED"
+        );
+
+        if (connectionStatus) {
+
+            connectionStatus.textContent =
+                "● Offline";
+
+            connectionStatus.classList.remove(
+                "online"
+            );
+
+            connectionStatus.classList.add(
+                "offline"
+            );
+        }
+
+        if (sosActive) {
+
+            setIndicator(
+                "responder",
+                "error",
+                "Connection lost"
+            );
+
+        } else {
+
+            setIndicator(
+                "responder",
+                "waiting",
+                "Not connected"
+            );
+        }
+    }
+);
+
+
+// ============================================================
 // SOS BUTTON
-// =====================================
+// ============================================================
 
 if (sosButton) {
 
@@ -228,25 +375,39 @@ if (sosButton) {
             }
 
             await startSOS();
-
         }
     );
 }
 
-// =====================================
+
+// ============================================================
 // START SOS
-// =====================================
+// ============================================================
 
 async function startSOS() {
 
     try {
 
         console.log(
-            "🚨 STARTING EMERGENCY"
+            "STARTING EMERGENCY"
         );
 
         sosActive = true;
         emergencyLocked = true;
+
+        pendingIceCandidates = [];
+
+
+        // ----------------------------------------------------
+        // WAKE LOCK
+        // ----------------------------------------------------
+
+        await requestWakeLock();
+
+
+        // ----------------------------------------------------
+        // SOS BUTTON
+        // ----------------------------------------------------
 
         if (sosButton) {
 
@@ -258,11 +419,17 @@ async function startSOS() {
             `;
         }
 
+
+        // ----------------------------------------------------
+        // SOS STATUS
+        // ----------------------------------------------------
+
         if (sosStatus) {
 
             sosStatus.textContent =
                 "Starting emergency protection...";
         }
+
 
         if (activeSOS) {
 
@@ -270,6 +437,11 @@ async function startSOS() {
                 "hidden"
             );
         }
+
+
+        // ----------------------------------------------------
+        // INITIAL INDICATORS
+        // ----------------------------------------------------
 
         setIndicator(
             "responder",
@@ -295,9 +467,10 @@ async function startSOS() {
             "Waiting for location..."
         );
 
-        // =================================
+
+        // ----------------------------------------------------
         // CAMERA + MICROPHONE
-        // =================================
+        // ----------------------------------------------------
 
         try {
 
@@ -307,12 +480,12 @@ async function startSOS() {
             ) {
 
                 throw new Error(
-                    "getUserMedia is not supported by this browser."
+                    "Camera and microphone are not supported."
                 );
             }
 
             console.log(
-                "📹 REQUESTING CAMERA + 🎙️ MICROPHONE"
+                "REQUESTING CAMERA + MICROPHONE"
             );
 
             localStream =
@@ -323,12 +496,13 @@ async function startSOS() {
                     },
 
                     audio: true
-
                 });
 
+
             console.log(
-                "✅ CAMERA + 🎙️ MICROPHONE READY"
+                "CAMERA + MICROPHONE READY"
             );
+
 
             setIndicator(
                 "camera",
@@ -345,61 +519,59 @@ async function startSOS() {
         } catch (mediaError) {
 
             console.error(
-                "❌ MEDIA ACCESS ERROR:",
+                "MEDIA ACCESS ERROR:",
                 mediaError
             );
+
+
+            // Emergency continues even if media permission fails
 
             setIndicator(
                 "camera",
                 "error",
-                "Permission required"
+                "Unavailable"
             );
 
             setIndicator(
                 "audio",
                 "error",
-                "Permission required"
+                "Unavailable"
             );
 
             if (sosStatus) {
 
                 sosStatus.textContent =
-                    "Camera and microphone permission required";
+                    "Emergency active — camera/microphone unavailable";
             }
-
-            sosActive = false;
-            emergencyLocked = false;
-
-            if (sosButton) {
-
-                sosButton.disabled = false;
-
-                sosButton.innerHTML = `
-                    <span>SOS</span>
-                    <small>PRESS FOR HELP</small>
-                `;
-            }
-
-            return;
         }
 
-        // =================================
-        // LIVE LOCATION
-        // =================================
+
+        // ----------------------------------------------------
+        // LOCATION
+        // ----------------------------------------------------
 
         startLocationTracking();
 
-        // =================================
-        // ASK BACKEND FOR RESPONDER
-        // =================================
 
-        socket.emit(
-            "sos-start"
-        );
+        // ----------------------------------------------------
+        // INFORM BACKEND
+        // ----------------------------------------------------
 
-        console.log(
-            "📤 SOS START SENT TO SERVER"
-        );
+        if (socket.connected) {
+
+            socket.emit("sos-start");
+
+            console.log(
+                "SOS START SENT TO SERVER"
+            );
+
+        } else {
+
+            console.warn(
+                "SOCKET NOT CONNECTED — SOS WILL RETRY THROUGH SOCKET"
+            );
+        }
+
 
         if (sosStatus) {
 
@@ -410,12 +582,14 @@ async function startSOS() {
     } catch (error) {
 
         console.error(
-            "❌ SOS START ERROR:",
+            "SOS START ERROR:",
             error
         );
 
         sosActive = false;
         emergencyLocked = false;
+
+        await releaseWakeLock();
 
         if (sosStatus) {
 
@@ -435,17 +609,19 @@ async function startSOS() {
     }
 }
 
-// =====================================
+
+// ============================================================
 // RESPONDER ASSIGNED
-// =====================================
+// ============================================================
 
 socket.on(
     "responder-assigned",
     async () => {
 
         console.log(
-            "👮 RESPONDER ASSIGNED"
+            "RESPONDER ASSIGNED"
         );
+
 
         if (sosStatus) {
 
@@ -453,64 +629,74 @@ socket.on(
                 "Responder connected";
         }
 
+
         setIndicator(
             "responder",
             "active",
             "CONNECTED"
         );
 
+
         try {
 
             if (!localStream) {
 
-                console.error(
-                    "❌ LOCAL MEDIA STREAM DOES NOT EXIST"
+                console.warn(
+                    "LOCAL MEDIA STREAM DOES NOT EXIST"
                 );
 
                 setIndicator(
                     "responder",
-                    "error",
-                    "Media unavailable"
+                    "waiting",
+                    "Responder connected"
                 );
 
                 return;
             }
 
+
             await createPeerConnection();
 
-            // =================================
-            // ADD CAMERA + MICROPHONE
-            // =================================
+
+            // ------------------------------------------------
+            // ADD MEDIA TRACKS
+            // ------------------------------------------------
 
             localStream
                 .getTracks()
-                .forEach(track => {
+                .forEach(
+                    track => {
 
-                    console.log(
-                        "📡 ADDING USER TRACK:",
-                        track.kind
-                    );
+                        console.log(
+                            "ADDING USER TRACK:",
+                            track.kind
+                        );
 
-                    peerConnection.addTrack(
-                        track,
-                        localStream
-                    );
-                });
+                        peerConnection.addTrack(
+                            track,
+                            localStream
+                        );
+                    }
+                );
+
 
             console.log(
-                "✅ USER CAMERA + AUDIO TRACKS ADDED"
+                "USER CAMERA + AUDIO TRACKS ADDED"
             );
 
-            // =================================
+
+            // ------------------------------------------------
             // CREATE OFFER
-            // =================================
+            // ------------------------------------------------
 
             const offer =
                 await peerConnection.createOffer();
 
+
             await peerConnection.setLocalDescription(
                 offer
             );
+
 
             socket.emit(
                 "webrtc-offer",
@@ -519,14 +705,15 @@ socket.on(
                 }
             );
 
+
             console.log(
-                "📤 WEBRTC OFFER SENT"
+                "WEBRTC OFFER SENT"
             );
 
         } catch (error) {
 
             console.error(
-                "❌ WEBRTC OFFER ERROR:",
+                "WEBRTC OFFER ERROR:",
                 error
             );
 
@@ -539,16 +726,17 @@ socket.on(
     }
 );
 
-// =====================================
+
+// ============================================================
 // NO RESPONDER
-// =====================================
+// ============================================================
 
 socket.on(
     "no-responder",
     () => {
 
         console.log(
-            "⚠️ NO RESPONDER AVAILABLE"
+            "NO RESPONDER AVAILABLE"
         );
 
         setIndicator(
@@ -565,18 +753,20 @@ socket.on(
     }
 );
 
-// =====================================
+
+// ============================================================
 // RESPONDER STATUS
-// =====================================
+// ============================================================
 
 socket.on(
     "responder-status",
     ({ status }) => {
 
         console.log(
-            "👮 RESPONDER STATUS:",
+            "RESPONDER STATUS:",
             status
         );
+
 
         if (status === "disconnected") {
 
@@ -595,24 +785,25 @@ socket.on(
             return;
         }
 
+
         if (status === "resolved") {
 
             finishEmergency();
-
         }
     }
 );
 
-// =====================================
+
+// ============================================================
 // RESPONDER UNAVAILABLE
-// =====================================
+// ============================================================
 
 socket.on(
     "responder-unavailable",
     () => {
 
         console.log(
-            "⚠️ RESPONDER UNAVAILABLE"
+            "RESPONDER UNAVAILABLE"
         );
 
         setIndicator(
@@ -629,26 +820,29 @@ socket.on(
     }
 );
 
-// =====================================
+
+// ============================================================
 // WEBRTC ANSWER
-// =====================================
+// ============================================================
 
 socket.on(
     "webrtc-answer",
     async ({ answer }) => {
 
         console.log(
-            "📥 WEBRTC ANSWER RECEIVED"
+            "WEBRTC ANSWER RECEIVED"
         );
+
 
         if (!peerConnection) {
 
             console.warn(
-                "⚠️ No peer connection available"
+                "NO PEER CONNECTION AVAILABLE"
             );
 
             return;
         }
+
 
         try {
 
@@ -656,15 +850,55 @@ socket.on(
                 new RTCSessionDescription(answer)
             );
 
+
             console.log(
-                "✅ RESPONDER ANSWER SET"
+                "RESPONDER ANSWER SET"
             );
+
+
+            // ------------------------------------------------
+            // ADD QUEUED ICE CANDIDATES
+            // ------------------------------------------------
+
+            if (
+                pendingIceCandidates.length > 0
+            ) {
+
+                console.log(
+                    "ADDING QUEUED ICE CANDIDATES:",
+                    pendingIceCandidates.length
+                );
+
+                for (
+                    const candidate
+                    of pendingIceCandidates
+                ) {
+
+                    try {
+
+                        await peerConnection.addIceCandidate(
+                            candidate
+                        );
+
+                    } catch (error) {
+
+                        console.error(
+                            "QUEUED ICE ERROR:",
+                            error
+                        );
+                    }
+                }
+
+                pendingIceCandidates = [];
+            }
+
 
             setIndicator(
                 "responder",
                 "active",
                 "LIVE • CONNECTED"
             );
+
 
             if (sosStatus) {
 
@@ -675,7 +909,7 @@ socket.on(
         } catch (error) {
 
             console.error(
-                "❌ ANSWER ERROR:",
+                "ANSWER ERROR:",
                 error
             );
 
@@ -688,63 +922,122 @@ socket.on(
     }
 );
 
-// =====================================
-// ICE CANDIDATE
-// =====================================
+
+// ============================================================
+// WEBRTC ICE CANDIDATE
+// ============================================================
 
 socket.on(
     "webrtc-ice-candidate",
     async ({ candidate }) => {
 
-        if (!peerConnection || !candidate) {
+        if (!candidate) {
             return;
         }
+
+
+        if (!peerConnection) {
+
+            console.warn(
+                "ICE RECEIVED WITHOUT PEER CONNECTION"
+            );
+
+            return;
+        }
+
+
+        const rtcCandidate =
+            new RTCIceCandidate(candidate);
+
+
+        // ----------------------------------------------------
+        // REMOTE DESCRIPTION NOT READY
+        // ----------------------------------------------------
+
+        if (
+            !peerConnection.remoteDescription
+        ) {
+
+            console.log(
+                "QUEUEING ICE CANDIDATE"
+            );
+
+            pendingIceCandidates.push(
+                rtcCandidate
+            );
+
+            return;
+        }
+
 
         try {
 
             await peerConnection.addIceCandidate(
-                new RTCIceCandidate(candidate)
+                rtcCandidate
             );
 
             console.log(
-                "🧊 USER ICE ADDED"
+                "USER ICE ADDED"
             );
 
         } catch (error) {
 
             console.error(
-                "❌ USER ICE ERROR:",
+                "USER ICE ERROR:",
                 error
             );
         }
     }
 );
 
-// =====================================
+
+// ============================================================
 // CREATE PEER CONNECTION
-// =====================================
+// ============================================================
 
 async function createPeerConnection() {
 
+    // --------------------------------------------------------
+    // CLOSE OLD CONNECTION
+    // --------------------------------------------------------
+
     if (peerConnection) {
 
-        peerConnection.close();
+        try {
+            peerConnection.close();
+        } catch (error) {
+
+            console.warn(
+                "OLD PEER CLOSE ERROR:",
+                error
+            );
+        }
 
         peerConnection = null;
     }
+
+
+    pendingIceCandidates = [];
+
+
+    // --------------------------------------------------------
+    // CREATE CONNECTION
+    // --------------------------------------------------------
 
     peerConnection =
         new RTCPeerConnection(
             RTC_CONFIG
         );
 
+
     console.log(
-        "🔗 USER PEER CONNECTION CREATED"
+        "USER PEER CONNECTION CREATED"
     );
 
-    // =================================
+
+    // --------------------------------------------------------
     // ICE
-    // =================================
+    // --------------------------------------------------------
 
     peerConnection.onicecandidate =
         event => {
@@ -753,22 +1046,42 @@ async function createPeerConnection() {
                 return;
             }
 
+
             socket.emit(
                 "webrtc-ice-candidate",
                 {
-                    candidate:
-                        event.candidate
+                    candidate: event.candidate
                 }
             );
 
+
             console.log(
-                "🧊 USER ICE SENT"
+                "USER ICE SENT"
             );
         };
 
-    // =================================
+
+    // --------------------------------------------------------
+    // ICE CONNECTION STATE
+    // --------------------------------------------------------
+
+    peerConnection.oniceconnectionstatechange =
+        () => {
+
+            if (!peerConnection) {
+                return;
+            }
+
+            console.log(
+                "USER ICE STATE:",
+                peerConnection.iceConnectionState
+            );
+        };
+
+
+    // --------------------------------------------------------
     // CONNECTION STATE
-    // =================================
+    // --------------------------------------------------------
 
     peerConnection.onconnectionstatechange =
         () => {
@@ -777,13 +1090,26 @@ async function createPeerConnection() {
                 return;
             }
 
+
             const state =
                 peerConnection.connectionState;
+
 
             console.log(
                 "USER WEBRTC STATE:",
                 state
             );
+
+
+            if (state === "new") {
+
+                setIndicator(
+                    "responder",
+                    "waiting",
+                    "Preparing connection..."
+                );
+            }
+
 
             if (state === "connecting") {
 
@@ -794,6 +1120,7 @@ async function createPeerConnection() {
                 );
             }
 
+
             if (state === "connected") {
 
                 setIndicator(
@@ -802,16 +1129,19 @@ async function createPeerConnection() {
                     "LIVE • CONNECTED"
                 );
 
+
                 if (sosStatus) {
 
                     sosStatus.textContent =
                         "Emergency monitoring active";
                 }
 
+
                 console.log(
-                    "🟢 USER WEBRTC CONNECTED"
+                    "USER WEBRTC CONNECTED"
                 );
             }
+
 
             if (state === "disconnected") {
 
@@ -822,6 +1152,7 @@ async function createPeerConnection() {
                 );
             }
 
+
             if (state === "failed") {
 
                 setIndicator(
@@ -830,10 +1161,12 @@ async function createPeerConnection() {
                     "Connection failed"
                 );
 
+
                 console.error(
-                    "❌ USER WEBRTC FAILED"
+                    "USER WEBRTC FAILED"
                 );
             }
+
 
             if (state === "closed") {
 
@@ -846,9 +1179,10 @@ async function createPeerConnection() {
         };
 }
 
-// =====================================
+
+// ============================================================
 // LIVE LOCATION
-// =====================================
+// ============================================================
 
 function startLocationTracking() {
 
@@ -863,11 +1197,27 @@ function startLocationTracking() {
         return;
     }
 
+
+    // --------------------------------------------------------
+    // CLEAR PREVIOUS WATCH
+    // --------------------------------------------------------
+
+    if (locationWatchId !== null) {
+
+        navigator.geolocation.clearWatch(
+            locationWatchId
+        );
+
+        locationWatchId = null;
+    }
+
+
     setIndicator(
         "location",
         "waiting",
         "Acquiring location..."
     );
+
 
     locationWatchId =
         navigator.geolocation.watchPosition(
@@ -880,17 +1230,20 @@ function startLocationTracking() {
                 const longitude =
                     position.coords.longitude;
 
+
                 console.log(
-                    "📍 LIVE LOCATION:",
+                    "LIVE LOCATION:",
                     latitude,
                     longitude
                 );
+
 
                 setIndicator(
                     "location",
                     "active",
                     `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
                 );
+
 
                 socket.emit(
                     "location-update",
@@ -901,19 +1254,56 @@ function startLocationTracking() {
                 );
             },
 
+
             error => {
 
                 console.error(
-                    "❌ LOCATION ERROR:",
+                    "LOCATION ERROR:",
                     error
                 );
+
+
+                let message =
+                    "Location unavailable";
+
+
+                if (
+                    error.code ===
+                    error.PERMISSION_DENIED
+                ) {
+
+                    message =
+                        "Permission required";
+                }
+
+
+                if (
+                    error.code ===
+                    error.POSITION_UNAVAILABLE
+                ) {
+
+                    message =
+                        "Location unavailable";
+                }
+
+
+                if (
+                    error.code ===
+                    error.TIMEOUT
+                ) {
+
+                    message =
+                        "Location timeout";
+                }
+
 
                 setIndicator(
                     "location",
                     "error",
-                    "Permission required"
+                    message
                 );
             },
+
 
             {
                 enableHighAccuracy: true,
@@ -923,16 +1313,10 @@ function startLocationTracking() {
         );
 }
 
-// =====================================
+
+// ============================================================
 // USER CANCEL
-// =====================================
-//
-// USER CANNOT END ACTIVE EMERGENCY.
-//
-// No sos-cancel is sent.
-//
-// Responder remains in control.
-//
+// ============================================================
 
 if (cancelButton) {
 
@@ -944,14 +1328,17 @@ if (cancelButton) {
                 return;
             }
 
+
             console.log(
-                "⚠️ USER ATTEMPTED TO CANCEL"
+                "USER ATTEMPTED TO CANCEL"
             );
+
 
             cancelButton.disabled = true;
 
             cancelButton.textContent =
                 "Emergency Still Active";
+
 
             if (sosStatus) {
 
@@ -959,31 +1346,35 @@ if (cancelButton) {
                     "Emergency remains active";
             }
 
+
             setIndicator(
                 "responder",
                 "active",
                 "Responder monitoring"
             );
 
+
             console.log(
-                "🔒 USER CANNOT END ACTIVE EMERGENCY"
+                "USER CANNOT END ACTIVE EMERGENCY"
             );
         }
     );
 }
 
-// =====================================
+
+// ============================================================
 // SOS STATUS
-// =====================================
+// ============================================================
 
 socket.on(
     "sos-status",
     ({ status }) => {
 
         console.log(
-            "🚨 SOS STATUS:",
+            "SOS STATUS:",
             status
         );
+
 
         if (status === "RESOLVED") {
 
@@ -992,13 +1383,18 @@ socket.on(
             return;
         }
 
-        if (status === "USER_DISCONNECTED") {
+
+        if (
+            status ===
+            "USER_DISCONNECTED"
+        ) {
 
             if (sosStatus) {
 
                 sosStatus.textContent =
                     "User connection disconnected";
             }
+
 
             setIndicator(
                 "responder",
@@ -1009,22 +1405,32 @@ socket.on(
     }
 );
 
-// =====================================
-// FINISH EMERGENCY
-// =====================================
 
-function finishEmergency() {
+// ============================================================
+// FINISH EMERGENCY
+// ============================================================
+
+async function finishEmergency() {
 
     console.log(
-        "✅ EMERGENCY FINISHED BY RESPONDER"
+        "EMERGENCY FINISHED BY RESPONDER"
     );
+
 
     sosActive = false;
     emergencyLocked = false;
 
-    // =================================
-    // STOP LOCATION
-    // =================================
+
+    // --------------------------------------------------------
+    // WAKE LOCK
+    // --------------------------------------------------------
+
+    await releaseWakeLock();
+
+
+    // --------------------------------------------------------
+    // LOCATION
+    // --------------------------------------------------------
 
     if (locationWatchId !== null) {
 
@@ -1035,37 +1441,52 @@ function finishEmergency() {
         locationWatchId = null;
     }
 
-    // =================================
-    // STOP CAMERA + MICROPHONE
-    // =================================
+
+    // --------------------------------------------------------
+    // CAMERA + MICROPHONE
+    // --------------------------------------------------------
 
     if (localStream) {
 
         localStream
             .getTracks()
-            .forEach(track => {
+            .forEach(
+                track => {
 
-                track.stop();
-
-            });
+                    track.stop();
+                }
+            );
 
         localStream = null;
     }
 
-    // =================================
-    // CLOSE WEBRTC
-    // =================================
+
+    // --------------------------------------------------------
+    // WEBRTC
+    // --------------------------------------------------------
 
     if (peerConnection) {
 
-        peerConnection.close();
+        try {
+            peerConnection.close();
+        } catch (error) {
+
+            console.warn(
+                "PEER CLOSE ERROR:",
+                error
+            );
+        }
 
         peerConnection = null;
     }
 
-    // =================================
+
+    pendingIceCandidates = [];
+
+
+    // --------------------------------------------------------
     // UI
-    // =================================
+    // --------------------------------------------------------
 
     if (sosStatus) {
 
@@ -1073,11 +1494,13 @@ function finishEmergency() {
             "Emergency resolved by responder";
     }
 
+
     setIndicator(
         "responder",
         "waiting",
         "Emergency completed"
     );
+
 
     setIndicator(
         "camera",
@@ -1085,17 +1508,20 @@ function finishEmergency() {
         "Stopped"
     );
 
+
     setIndicator(
         "audio",
         "waiting",
         "Stopped"
     );
 
+
     setIndicator(
         "location",
         "waiting",
         "Emergency ended"
     );
+
 
     if (sosButton) {
 
@@ -1107,6 +1533,7 @@ function finishEmergency() {
         `;
     }
 
+
     if (cancelButton) {
 
         cancelButton.disabled = true;
@@ -1115,3 +1542,40 @@ function finishEmergency() {
             "Emergency Resolved";
     }
 }
+
+
+// ============================================================
+// PAGE EXIT PROTECTION
+// ============================================================
+
+window.addEventListener(
+    "beforeunload",
+    () => {
+
+        if (peerConnection) {
+
+            try {
+                peerConnection.close();
+            } catch (error) {
+
+                console.warn(
+                    "PEER CLOSE ERROR:",
+                    error
+                );
+            }
+        }
+    }
+);
+
+
+// ============================================================
+// APP LOADED
+// ============================================================
+
+console.log(
+    "SECURE SOS GUARDIAN USER APP LOADED"
+);
+
+console.log(
+    "SCREEN WAKE LOCK SYSTEM READY"
+);
