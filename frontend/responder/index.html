@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>SOS Guardian — Responder</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <main class="responder-app">
+
+        <!-- HEADER -->
+
+        <header class="topbar">
+
+            <div>
+                <h1>SOS Guardian</h1>
+                <p>Responder Emergency Dashboard</p>
+            </div>
+
+            <div
+                id="connectionStatus"
+                class="connection offline"
+            >
+                ● Offline
+            </div>
+
+        </header>
+
+
+        <!-- EMERGENCY SESSION -->
+
+        <section class="session-card">
+
+            <div class="session-header">
+
+                <div>
+
+                    <span class="label">
+                        EMERGENCY STATUS
+                    </span>
+
+                    <h2 id="sosTitle">
+                        Waiting for SOS
+                    </h2>
+
+                </div>
+
+
+                <div
+                    id="sosIndicator"
+                    class="sos-indicator hidden"
+                >
+
+                    <span></span>
+                    LIVE
+
+                </div>
+
+            </div>
+
+
+            <!-- RESPONDER STATUS -->
+
+            <div
+                id="waitingPanel"
+                class="join-panel"
+            >
+
+                <p id="waitingMessage">
+                    Responder system is ready.
+                    Waiting for an emergency...
+                </p>
+
+            </div>
+
+
+            <!-- ACTIVE SESSION -->
+
+            <div
+                id="activeSession"
+                class="active-session hidden"
+            >
+
+                <div class="session-info">
+
+                    <span>
+                        Emergency Status
+                    </span>
+
+                    <strong id="emergencyStatus">
+                        ACTIVE
+                    </strong>
+
+                </div>
+
+
+                <div class="session-info">
+
+                    <span>
+                        Responder Status
+                    </span>
+
+                    <strong id="responderStatus">
+                        Connecting...
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- LIVE MEDIA -->
+
+        <section class="media-card">
+
+            <div class="section-title">
+
+                <div>
+
+                    <h2>
+                        Live Emergency Feed
+                    </h2>
+
+                    <p>
+                        Camera and microphone from
+                        the emergency user
+                    </p>
+
+                </div>
+
+
+                <div
+                    id="mediaStatus"
+                    class="media-status"
+                >
+                    Waiting
+                </div>
+
+            </div>
+
+
+            <div class="video-container">
+
+                <video
+                    id="remoteVideo"
+                    autoplay
+                    playsinline
+                ></video>
+
+
+                <div
+                    id="videoPlaceholder"
+                    class="video-placeholder"
+                >
+
+                    <div class="camera-icon">
+                        📹
+                    </div>
+
+                    <h3>
+                        Camera Feed
+                    </h3>
+
+                    <p>
+                        Waiting for emergency stream...
+                    </p>
+
+                </div>
+
+
+                <div
+                    id="liveBadge"
+                    class="live-badge hidden"
+                >
+
+                    <span></span>
+                    LIVE
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- LOCATION -->
+
+        <section class="location-card">
+
+            <div class="section-title">
+
+                <div>
+
+                    <h2>
+                        Live Location
+                    </h2>
+
+                    <p>
+                        Real-time emergency location
+                    </p>
+
+                </div>
+
+
+                <div
+                    id="locationStatus"
+                    class="media-status"
+                >
+                    Waiting
+                </div>
+
+            </div>
+
+
+            <div class="location-box">
+
+                <div class="location-icon">
+                    📍
+                </div>
+
+
+                <div>
+
+                    <strong>
+                        Current Coordinates
+                    </strong>
+
+                    <p id="coordinates">
+                        Waiting for location...
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <a
+                id="mapLink"
+                class="map-link disabled"
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                Open Location in Maps
+            </a>
+
+        </section>
+
+
+        <!-- ACTIONS -->
+
+        <section class="actions-card">
+
+            <button
+                id="resolveButton"
+                class="resolve-button"
+                disabled
+            >
+                ✓ Resolve Emergency
+            </button>
+
+        </section>
+
+
+        <footer>
+
+            <p>
+                SOS Guardian • Authorized Responder System
+            </p>
+
+        </footer>
+
+    </main>
+
+
+    <!-- SOCKET.IO -->
+
+    <script
+        src="http://localhost:5000/socket.io/socket.io.js">
+    </script>
+
+
+    <!-- APPLICATION -->
+
+    <script src="app.js"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>SOS Guardian</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <main class="app">
+
+        <!-- HEADER -->
+
+        <header class="header">
+
+            <div>
+                <h1>SOS Guardian</h1>
+                <p>Emergency Safety System</p>
+            </div>
+
+            <div
+                id="connectionStatus"
+                class="status offline"
+            >
+                ● Offline
+            </div>
+
+        </header>
+
+
+        <!-- SOS -->
+
+        <section class="emergency-card">
+
+            <div class="shield">
+                🛡️
+            </div>
+
+            <h2>Emergency Assistance</h2>
+
+            <p class="description">
+                Press the SOS button when you need
+                immediate assistance.
+            </p>
+
+            <button
+                id="sosButton"
+                class="sos-button"
+            >
+
+                <span>SOS</span>
+
+                <small>
+                    PRESS FOR HELP
+                </small>
+
+            </button>
+
+            <div
+                id="sosStatus"
+                class="sos-status"
+            >
+                SOS system ready
+            </div>
+
+        </section>
+
+
+        <!-- STATUS -->
+
+        <section class="status-panel">
+
+            <!-- LOCATION -->
+
+            <div class="status-item">
+
+                <span class="icon">📍</span>
+
+                <div>
+
+                    <strong>
+                        Live Location
+                    </strong>
+
+                    <p id="locationStatus">
+                        Waiting for SOS
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <!-- CAMERA -->
+
+            <div class="status-item">
+
+                <span class="icon">📹</span>
+
+                <div>
+
+                    <strong>
+                        Emergency Camera
+                    </strong>
+
+                    <p id="cameraStatus">
+                        Standby
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <!-- AUDIO -->
+
+            <div class="status-item">
+
+                <span class="icon">🎙️</span>
+
+                <div>
+
+                    <strong>
+                        Emergency Audio
+                    </strong>
+
+                    <p id="audioStatus">
+                        Standby
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <!-- RESPONDER -->
+
+            <div class="status-item">
+
+                <span class="icon">👮</span>
+
+                <div>
+
+                    <strong>
+                        Responder
+                    </strong>
+
+                    <p id="responderStatus">
+                        Waiting for responder
+                    </p>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ACTIVE SOS -->
+
+        <section
+            id="activeSOS"
+            class="active-sos hidden"
+        >
+
+            <div class="active-header">
+
+                <span class="live-dot"></span>
+
+                <strong>
+                    EMERGENCY ACTIVE
+                </strong>
+
+            </div>
+
+            <p>
+                Emergency services have been notified.
+                Keep this page open.
+            </p>
+
+            <button
+                id="cancelButton"
+                class="cancel-button"
+            >
+                Cancel SOS
+            </button>
+
+        </section>
+
+
+        <!-- FOOTER -->
+
+        <footer>
+
+            <p>
+                SOS Guardian • Emergency Communication System
+            </p>
+
+        </footer>
+
+    </main>
+
+
+    <!-- SOCKET.IO -->
+
+    <script
+        src="http://localhost:5000/socket.io/socket.io.js">
+    </script>
+
+
+    <!-- APPLICATION -->
+
+    <script src="app.js"></script>
+
+</body>
+
+</html>
