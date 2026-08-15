@@ -1,4 +1,10 @@
+// =====================================
+// SOS GUARDIAN — RESPONDER APP
+// Secure WebRTC + Live Location
+// =====================================
+
 const socket = io("https://sos-guardian-backend.onrender.com");
+
 let sosId = null;
 let peerConnection = null;
 
@@ -6,13 +12,34 @@ let joined = false;
 let sessionAuthorized = false;
 let emergencyActive = false;
 
+// =====================================
+// WEBRTC QUEUES
+// =====================================
+
+// Sometimes WebRTC offer arrives before
+// server sends join-approved.
+// We keep it temporarily instead of dropping it.
+
+let pendingOffer = null;
+let pendingIceCandidates = [];
+
+
+// =====================================
+// RTC CONFIG
+// =====================================
+
 const RTC_CONFIG = {
+
     iceServers: [
+
         {
             urls: "stun:stun.l.google.com:19302"
         }
+
     ]
+
 };
+
 
 // =====================================
 // ELEMENTS
@@ -69,6 +96,7 @@ const mapLink =
 const resolveButton =
     document.getElementById("resolveButton");
 
+
 // =====================================
 // INITIAL STATE
 // =====================================
@@ -76,99 +104,158 @@ const resolveButton =
 function resetUI() {
 
     joined = false;
+
     sessionAuthorized = false;
+
     emergencyActive = false;
 
     sosId = null;
 
+    pendingOffer = null;
+
+    pendingIceCandidates = [];
+
+
     if (joinPanel) {
-        joinPanel.classList.remove("hidden");
+
+        joinPanel.classList.remove(
+            "hidden"
+        );
     }
+
 
     if (activeSession) {
-        activeSession.classList.add("hidden");
+
+        activeSession.classList.add(
+            "hidden"
+        );
     }
+
 
     if (sosIndicator) {
-        sosIndicator.classList.add("hidden");
+
+        sosIndicator.classList.add(
+            "hidden"
+        );
     }
 
+
     if (resolveButton) {
+
         resolveButton.disabled = true;
     }
 
+
     if (mediaStatus) {
-        mediaStatus.textContent = "Waiting";
+
+        mediaStatus.textContent =
+            "Waiting";
     }
+
 
     if (locationStatus) {
-        locationStatus.textContent = "Waiting";
+
+        locationStatus.textContent =
+            "Waiting";
     }
 
+
     if (coordinates) {
+
         coordinates.textContent =
             "Waiting for location...";
     }
 
+
     if (mapLink) {
-        mapLink.removeAttribute("href");
-        mapLink.classList.add("disabled");
+
+        mapLink.removeAttribute(
+            "href"
+        );
+
+        mapLink.classList.add(
+            "disabled"
+        );
     }
+
 
     if (videoPlaceholder) {
-        videoPlaceholder.classList.remove("hidden");
+
+        videoPlaceholder.classList.remove(
+            "hidden"
+        );
     }
 
+
     if (liveBadge) {
-        liveBadge.classList.add("hidden");
+
+        liveBadge.classList.add(
+            "hidden"
+        );
+    }
+
+
+    if (remoteVideo) {
+
+        remoteVideo.srcObject = null;
     }
 }
 
+
 resetUI();
+
 
 // =====================================
 // SOCKET CONNECTION
 // =====================================
 
-socket.on("connect", () => {
+socket.on(
+    "connect",
+    () => {
 
-    console.log(
-        "🟢 RESPONDER SOCKET CONNECTED:",
-        socket.id
-    );
-
-    if (connectionStatus) {
-
-        connectionStatus.textContent =
-            "● Connected";
-
-        connectionStatus.classList.remove(
-            "offline"
+        console.log(
+            "🟢 RESPONDER SOCKET CONNECTED:",
+            socket.id
         );
 
-        connectionStatus.classList.add(
-            "online"
+
+        if (connectionStatus) {
+
+            connectionStatus.textContent =
+                "● Connected";
+
+            connectionStatus.classList.remove(
+                "offline"
+            );
+
+            connectionStatus.classList.add(
+                "online"
+            );
+        }
+
+
+        if (responderStatus) {
+
+            responderStatus.textContent =
+                "Registering responder...";
+        }
+
+
+        // =================================
+        // REGISTER RESPONDER
+        // =================================
+
+        socket.emit(
+            "responder-online"
+        );
+
+
+        console.log(
+            "👮 RESPONDER ONLINE SENT"
         );
     }
+);
 
-    if (responderStatus) {
-
-        responderStatus.textContent =
-            "Registering responder...";
-    }
-
-    // =================================
-    // REGISTER AS RESPONDER
-    // =================================
-
-    socket.emit(
-        "responder-online"
-    );
-
-    console.log(
-        "👮 RESPONDER ONLINE SENT"
-    );
-});
 
 // =====================================
 // RESPONDER READY
@@ -182,6 +269,7 @@ socket.on(
             "✅ RESPONDER AUTHORIZED / READY"
         );
 
+
         if (responderStatus) {
 
             responderStatus.textContent =
@@ -190,62 +278,70 @@ socket.on(
     }
 );
 
+
 // =====================================
 // SOCKET DISCONNECT
 // =====================================
 
-socket.on("disconnect", () => {
+socket.on(
+    "disconnect",
+    () => {
 
-    console.log(
-        "🔴 RESPONDER SOCKET DISCONNECTED"
-    );
-
-    if (connectionStatus) {
-
-        connectionStatus.textContent =
-            "● Offline";
-
-        connectionStatus.classList.remove(
-            "online"
+        console.log(
+            "🔴 RESPONDER SOCKET DISCONNECTED"
         );
 
-        connectionStatus.classList.add(
-            "offline"
-        );
+
+        if (connectionStatus) {
+
+            connectionStatus.textContent =
+                "● Offline";
+
+            connectionStatus.classList.remove(
+                "online"
+            );
+
+            connectionStatus.classList.add(
+                "offline"
+            );
+        }
+
+
+        if (responderStatus) {
+
+            responderStatus.textContent =
+                "Disconnected from server";
+        }
+
+
+        sessionAuthorized = false;
+
+
+        if (resolveButton) {
+
+            resolveButton.disabled =
+                true;
+        }
     }
+);
 
-    if (responderStatus) {
-
-        responderStatus.textContent =
-            "Disconnected from server";
-    }
-
-    sessionAuthorized = false;
-
-    if (resolveButton) {
-        resolveButton.disabled = true;
-    }
-});
 
 // =====================================
 // INCOMING SOS
 // =====================================
-//
-// Server automatically assigns this responder.
-//
-// IMPORTANT:
-// Do not trust a manually typed SOS ID.
-// The server-generated SOS ID is used.
-//
 
 socket.on(
     "incoming-sos",
-    ({ sosId: incomingSOSId, startedAt } = {}) => {
+    ({
+        sosId: incomingSOSId,
+        startedAt
+    } = {}) => {
 
         console.log(
             "🚨 INCOMING SOS RECEIVED:",
             incomingSOSId
         );
+
 
         if (!incomingSOSId) {
 
@@ -256,9 +352,10 @@ socket.on(
             return;
         }
 
-        // ---------------------------------
-        // Prevent replacing an active SOS
-        // ---------------------------------
+
+        // =================================
+        // PREVENT REPLACING ACTIVE SOS
+        // =================================
 
         if (
             emergencyActive &&
@@ -266,11 +363,16 @@ socket.on(
         ) {
 
             console.warn(
-                "⚠️ Already handling an active SOS"
+                "⚠️ ALREADY HANDLING ACTIVE SOS"
             );
 
             return;
         }
+
+
+        // =================================
+        // SET SESSION
+        // =================================
 
         sosId =
             String(incomingSOSId);
@@ -278,17 +380,27 @@ socket.on(
         emergencyActive = true;
 
         joined = false;
+
         sessionAuthorized = false;
 
-        // ---------------------------------
-        // Update UI
-        // ---------------------------------
+
+        // Clear old WebRTC data
+
+        pendingOffer = null;
+
+        pendingIceCandidates = [];
+
+
+        // =================================
+        // UI
+        // =================================
 
         if (sosTitle) {
 
             sosTitle.textContent =
                 "Incoming Emergency";
         }
+
 
         if (sosIndicator) {
 
@@ -297,12 +409,14 @@ socket.on(
             );
         }
 
+
         if (joinPanel) {
 
             joinPanel.classList.add(
                 "hidden"
             );
         }
+
 
         if (activeSession) {
 
@@ -311,11 +425,13 @@ socket.on(
             );
         }
 
+
         if (sosIdDisplay) {
 
             sosIdDisplay.textContent =
                 sosId;
         }
+
 
         if (responderStatus) {
 
@@ -323,15 +439,18 @@ socket.on(
                 "Emergency assigned — authorizing session...";
         }
 
+
         if (mediaStatus) {
 
             mediaStatus.textContent =
                 "Authorizing";
         }
 
+
         console.log(
             "🔐 REQUESTING SERVER SESSION AUTHORIZATION"
         );
+
 
         // =================================
         // REQUEST AUTHORIZED JOIN
@@ -346,18 +465,22 @@ socket.on(
     }
 );
 
+
 // =====================================
 // JOIN APPROVED
 // =====================================
 
 socket.on(
     "join-approved",
-    async ({ sosId: approvedSOSId } = {}) => {
+    async ({
+        sosId: approvedSOSId
+    } = {}) => {
 
         console.log(
             "🔐 JOIN APPROVED:",
             approvedSOSId
         );
+
 
         if (!approvedSOSId) {
 
@@ -368,9 +491,10 @@ socket.on(
             return;
         }
 
-        // ---------------------------------
-        // Verify same server session
-        // ---------------------------------
+
+        // =================================
+        // SECURITY CHECK
+        // =================================
 
         if (
             sosId &&
@@ -382,27 +506,34 @@ socket.on(
                 "🚫 SOS ID MISMATCH"
             );
 
-            sessionAuthorized = false;
+            sessionAuthorized =
+                false;
 
             return;
         }
 
+
         sosId =
             String(approvedSOSId);
 
+
         joined = true;
+
         sessionAuthorized = true;
+
         emergencyActive = true;
 
-        // ---------------------------------
+
+        // =================================
         // UI
-        // ---------------------------------
+        // =================================
 
         if (sosTitle) {
 
             sosTitle.textContent =
                 "Emergency Session Active";
         }
+
 
         if (sosIndicator) {
 
@@ -411,12 +542,14 @@ socket.on(
             );
         }
 
+
         if (joinPanel) {
 
             joinPanel.classList.add(
                 "hidden"
             );
         }
+
 
         if (activeSession) {
 
@@ -425,11 +558,13 @@ socket.on(
             );
         }
 
+
         if (sosIdDisplay) {
 
             sosIdDisplay.textContent =
                 sosId;
         }
+
 
         if (responderStatus) {
 
@@ -437,17 +572,52 @@ socket.on(
                 "Authorized responder";
         }
 
+
         if (mediaStatus) {
 
             mediaStatus.textContent =
                 "Waiting for user camera";
         }
 
+
         console.log(
             "✅ AUTHORIZED SOS SESSION ACTIVE"
         );
+
+
+        // =================================
+        // PROCESS QUEUED OFFER
+        // =================================
+
+        if (pendingOffer) {
+
+            console.log(
+                "📦 PROCESSING QUEUED WEBRTC OFFER"
+            );
+
+
+            const queuedOffer =
+                pendingOffer;
+
+
+            pendingOffer = null;
+
+
+            await handleWebRTCOffer(
+                queuedOffer.offer,
+                queuedOffer.offerSOSId
+            );
+        }
+
+
+        // =================================
+        // PROCESS QUEUED ICE
+        // =================================
+
+        await flushPendingIceCandidates();
     }
 );
+
 
 // =====================================
 // JOIN DENIED
@@ -455,16 +625,27 @@ socket.on(
 
 socket.on(
     "join-denied",
-    ({ reason } = {}) => {
+    ({
+        reason
+    } = {}) => {
 
         console.warn(
             "🚫 SOS JOIN DENIED:",
             reason
         );
 
+
         joined = false;
+
         sessionAuthorized = false;
+
         emergencyActive = false;
+
+
+        pendingOffer = null;
+
+        pendingIceCandidates = [];
+
 
         if (responderStatus) {
 
@@ -473,17 +654,20 @@ socket.on(
                 "SOS session authorization denied";
         }
 
+
         if (mediaStatus) {
 
             mediaStatus.textContent =
                 "Access denied";
         }
 
+
         if (sosTitle) {
 
             sosTitle.textContent =
                 "Access Denied";
         }
+
 
         if (sosIndicator) {
 
@@ -492,10 +676,13 @@ socket.on(
             );
         }
 
+
         if (resolveButton) {
 
-            resolveButton.disabled = true;
+            resolveButton.disabled =
+                true;
         }
+
 
         if (joinPanel) {
 
@@ -504,6 +691,7 @@ socket.on(
             );
         }
 
+
         if (activeSession) {
 
             activeSession.classList.add(
@@ -511,19 +699,15 @@ socket.on(
             );
         }
 
+
         sosId = null;
     }
 );
 
+
 // =====================================
 // MANUAL JOIN
 // =====================================
-//
-// Kept because HTML contains the input/button.
-//
-// However, server authorization is mandatory.
-// A random/fake SOS ID will be rejected.
-//
 
 if (joinButton) {
 
@@ -532,6 +716,7 @@ if (joinButton) {
         manualJoinSOS
     );
 }
+
 
 if (sosIdInput) {
 
@@ -547,21 +732,24 @@ if (sosIdInput) {
     );
 }
 
+
 function manualJoinSOS() {
 
     if (sessionAuthorized) {
 
         console.warn(
-            "⚠️ Already authorized for an SOS"
+            "⚠️ ALREADY AUTHORIZED FOR AN SOS"
         );
 
         return;
     }
 
+
     const enteredSOSId =
         sosIdInput
             ? sosIdInput.value.trim()
             : "";
+
 
     if (!enteredSOSId) {
 
@@ -572,19 +760,23 @@ function manualJoinSOS() {
         return;
     }
 
+
     console.log(
-        "🔐 Manual authorization request:",
+        "🔐 MANUAL AUTHORIZATION REQUEST:",
         enteredSOSId
     );
 
+
     sosId =
         enteredSOSId;
+
 
     if (responderStatus) {
 
         responderStatus.textContent =
             "Validating SOS session...";
     }
+
 
     socket.emit(
         "join-sos",
@@ -594,8 +786,9 @@ function manualJoinSOS() {
     );
 }
 
+
 // =====================================
-// WEBRTC OFFER
+// WEBRTC OFFER RECEIVED
 // USER → RESPONDER
 // =====================================
 
@@ -610,94 +803,192 @@ socket.on(
             "📥 WEBRTC OFFER RECEIVED"
         );
 
-        // =================================
-        // SECURITY CHECK
-        // =================================
-
-        if (!sessionAuthorized) {
-
-            console.warn(
-                "🚫 WEBRTC OFFER BLOCKED — SESSION NOT AUTHORIZED"
-            );
-
-            return;
-        }
-
-        if (
-            offerSOSId &&
-            String(offerSOSId) !==
-            String(sosId)
-        ) {
-
-            console.warn(
-                "🚫 WEBRTC OFFER BLOCKED — SOS ID MISMATCH"
-            );
-
-            return;
-        }
 
         if (!offer) {
 
             console.warn(
-                "⚠️ Empty WebRTC offer"
+                "⚠️ EMPTY WEBRTC OFFER"
             );
 
             return;
         }
 
-        try {
 
-            await createPeerConnection();
+        // =================================
+        // IMPORTANT RACE-CONDITION FIX
+        // =================================
+        //
+        // Offer may arrive before
+        // join-approved.
+        //
+        // DO NOT DROP IT.
+        //
 
-            await peerConnection.setRemoteDescription(
-                new RTCSessionDescription(
-                    offer
-                )
-            );
-
-            console.log(
-                "✅ USER OFFER SET"
-            );
-
-            const answer =
-                await peerConnection.createAnswer();
-
-            await peerConnection.setLocalDescription(
-                answer
-            );
-
-            socket.emit(
-                "webrtc-answer",
-                {
-                    answer
-                }
-            );
+        if (!sessionAuthorized) {
 
             console.log(
-                "📤 WEBRTC ANSWER SENT"
+                "📦 WEBRTC OFFER QUEUED — WAITING FOR AUTHORIZATION"
             );
 
-            if (responderStatus) {
 
-                responderStatus.textContent =
-                    "Connecting to emergency user...";
-            }
+            pendingOffer = {
 
-        } catch (error) {
+                offer,
 
-            console.error(
-                "❌ WEBRTC OFFER ERROR:",
-                error
-            );
+                offerSOSId
 
-            if (responderStatus) {
+            };
 
-                responderStatus.textContent =
-                    "WebRTC connection error";
-            }
+
+            return;
         }
+
+
+        await handleWebRTCOffer(
+            offer,
+            offerSOSId
+        );
     }
 );
+
+
+// =====================================
+// HANDLE WEBRTC OFFER
+// =====================================
+
+async function handleWebRTCOffer(
+    offer,
+    offerSOSId
+) {
+
+    console.log(
+        "🔐 PROCESSING AUTHORIZED WEBRTC OFFER"
+    );
+
+
+    // =================================
+    // SECURITY
+    // =================================
+
+    if (!sessionAuthorized) {
+
+        console.warn(
+            "🚫 OFFER BLOCKED — NOT AUTHORIZED"
+        );
+
+        return;
+    }
+
+
+    if (
+        offerSOSId &&
+        String(offerSOSId) !==
+        String(sosId)
+    ) {
+
+        console.warn(
+            "🚫 WEBRTC OFFER BLOCKED — SOS ID MISMATCH"
+        );
+
+        return;
+    }
+
+
+    if (!offer) {
+
+        console.warn(
+            "⚠️ EMPTY WEBRTC OFFER"
+        );
+
+        return;
+    }
+
+
+    try {
+
+        // =================================
+        // CREATE PEER
+        // =================================
+
+        await createPeerConnection();
+
+
+        // =================================
+        // SET USER OFFER
+        // =================================
+
+        await peerConnection.setRemoteDescription(
+            new RTCSessionDescription(
+                offer
+            )
+        );
+
+
+        console.log(
+            "✅ USER OFFER SET"
+        );
+
+
+        // =================================
+        // CREATE ANSWER
+        // =================================
+
+        const answer =
+            await peerConnection.createAnswer();
+
+
+        await peerConnection.setLocalDescription(
+            answer
+        );
+
+
+        // =================================
+        // SEND ANSWER
+        // =================================
+
+        socket.emit(
+            "webrtc-answer",
+            {
+                answer
+            }
+        );
+
+
+        console.log(
+            "📤 WEBRTC ANSWER SENT"
+        );
+
+
+        if (responderStatus) {
+
+            responderStatus.textContent =
+                "Connecting to emergency user...";
+        }
+
+
+        // =================================
+        // PROCESS ICE THAT ARRIVED
+        // BEFORE PEER EXISTED
+        // =================================
+
+        await flushPendingIceCandidates();
+
+    } catch (error) {
+
+        console.error(
+            "❌ WEBRTC OFFER ERROR:",
+            error
+        );
+
+
+        if (responderStatus) {
+
+            responderStatus.textContent =
+                "WebRTC connection error";
+        }
+    }
+}
+
 
 // =====================================
 // WEBRTC ICE
@@ -710,57 +1001,192 @@ socket.on(
         sosId: candidateSOSId
     } = {}) => {
 
+        if (!candidate) {
+
+            return;
+        }
+
+
+        // =================================
+        // QUEUE BEFORE AUTHORIZATION
+        // =================================
+
         if (!sessionAuthorized) {
 
-            console.warn(
-                "🚫 ICE BLOCKED — SESSION NOT AUTHORIZED"
+            console.log(
+                "📦 ICE QUEUED — WAITING FOR AUTHORIZATION"
             );
+
+
+            pendingIceCandidates.push({
+
+                candidate,
+
+                candidateSOSId
+
+            });
+
 
             return;
         }
 
-        if (
-            candidateSOSId &&
-            String(candidateSOSId) !==
-            String(sosId)
-        ) {
 
-            console.warn(
-                "🚫 ICE BLOCKED — SOS ID MISMATCH"
-            );
+        // =================================
+        // QUEUE IF PEER NOT READY
+        // =================================
 
-            return;
-        }
-
-        if (
-            !peerConnection ||
-            !candidate
-        ) {
-
-            return;
-        }
-
-        try {
-
-            await peerConnection.addIceCandidate(
-                new RTCIceCandidate(
-                    candidate
-                )
-            );
+        if (!peerConnection) {
 
             console.log(
-                "🧊 RESPONDER ICE ADDED"
+                "📦 ICE QUEUED — PEER NOT READY"
             );
 
-        } catch (error) {
 
-            console.error(
-                "❌ RESPONDER ICE ERROR:",
-                error
-            );
+            pendingIceCandidates.push({
+
+                candidate,
+
+                candidateSOSId
+
+            });
+
+
+            return;
         }
+
+
+        await handleRemoteIceCandidate(
+            candidate,
+            candidateSOSId
+        );
     }
 );
+
+
+// =====================================
+// HANDLE REMOTE ICE
+// =====================================
+
+async function handleRemoteIceCandidate(
+    candidate,
+    candidateSOSId
+) {
+
+    if (!sessionAuthorized) {
+
+        console.warn(
+            "🚫 ICE BLOCKED — SESSION NOT AUTHORIZED"
+        );
+
+        return;
+    }
+
+
+    if (
+        candidateSOSId &&
+        String(candidateSOSId) !==
+        String(sosId)
+    ) {
+
+        console.warn(
+            "🚫 ICE BLOCKED — SOS ID MISMATCH"
+        );
+
+        return;
+    }
+
+
+    if (!peerConnection) {
+
+        console.log(
+            "📦 ICE QUEUED — PEER CONNECTION NOT READY"
+        );
+
+
+        pendingIceCandidates.push({
+
+            candidate,
+
+            candidateSOSId
+
+        });
+
+
+        return;
+    }
+
+
+    try {
+
+        await peerConnection.addIceCandidate(
+            new RTCIceCandidate(
+                candidate
+            )
+        );
+
+
+        console.log(
+            "🧊 RESPONDER ICE ADDED"
+        );
+
+    } catch (error) {
+
+        console.error(
+            "❌ RESPONDER ICE ERROR:",
+            error
+        );
+    }
+}
+
+
+// =====================================
+// FLUSH PENDING ICE
+// =====================================
+
+async function flushPendingIceCandidates() {
+
+    if (
+        !sessionAuthorized ||
+        !peerConnection
+    ) {
+
+        return;
+    }
+
+
+    if (
+        pendingIceCandidates.length === 0
+    ) {
+
+        return;
+    }
+
+
+    console.log(
+        "📦 PROCESSING QUEUED ICE CANDIDATES:",
+        pendingIceCandidates.length
+    );
+
+
+    const candidates =
+        [...pendingIceCandidates];
+
+
+    pendingIceCandidates = [];
+
+
+    for (
+        const item
+        of candidates
+    ) {
+
+        await handleRemoteIceCandidate(
+            item.candidate,
+            item.candidateSOSId
+        );
+    }
+}
+
 
 // =====================================
 // CREATE PEER CONNECTION
@@ -775,21 +1201,44 @@ async function createPeerConnection() {
         );
     }
 
+
+    // =================================
+    // CLOSE OLD CONNECTION
+    // =================================
+
     if (peerConnection) {
 
-        peerConnection.close();
+        try {
+
+            peerConnection.close();
+
+        } catch (error) {
+
+            console.warn(
+                "⚠️ OLD PEER CLOSE ERROR:",
+                error
+            );
+        }
+
 
         peerConnection = null;
     }
+
+
+    // =================================
+    // CREATE NEW PEER
+    // =================================
 
     peerConnection =
         new RTCPeerConnection(
             RTC_CONFIG
         );
 
+
     console.log(
         "🔗 AUTHORIZED PEER CONNECTION CREATED"
     );
+
 
     // =================================
     // REMOTE MEDIA
@@ -803,14 +1252,113 @@ async function createPeerConnection() {
                 event.track.kind
             );
 
+
+            // =================================
+            // VIDEO / AUDIO STREAM
+            // =================================
+
             if (
                 event.streams &&
                 event.streams[0]
             ) {
 
-                remoteVideo.srcObject =
+                const stream =
                     event.streams[0];
+
+
+                console.log(
+                    "📡 REMOTE STREAM RECEIVED:",
+                    stream
+                        .getTracks()
+                        .map(
+                            track =>
+                                track.kind
+                        )
+                );
+
+
+                if (remoteVideo) {
+
+                    remoteVideo.srcObject =
+                        stream;
+
+
+                    remoteVideo.autoplay =
+                        true;
+
+
+                    remoteVideo.playsInline =
+                        true;
+
+
+                    // We mute only to guarantee
+                    // autoplay of the video.
+                    // Audio track still exists
+                    // in the MediaStream.
+
+                    remoteVideo.muted =
+                        false;
+
+
+                    remoteVideo
+                        .play()
+                        .then(
+                            () => {
+
+                                console.log(
+                                    "📹 REMOTE VIDEO PLAYING"
+                                );
+                            }
+                        )
+                        .catch(
+                            error => {
+
+                                console.warn(
+                                    "⚠️ VIDEO AUTOPLAY BLOCKED:",
+                                    error
+                                );
+
+
+                                // Try muted autoplay
+                                // if browser blocks audio.
+
+                                if (
+                                    remoteVideo
+                                ) {
+
+                                    remoteVideo.muted =
+                                        true;
+
+
+                                    remoteVideo
+                                        .play()
+                                        .then(
+                                            () => {
+
+                                                console.log(
+                                                    "📹 REMOTE VIDEO PLAYING MUTED"
+                                                );
+                                            }
+                                        )
+                                        .catch(
+                                            playError => {
+
+                                                console.warn(
+                                                    "⚠️ VIDEO PLAY FAILED:",
+                                                    playError
+                                                );
+                                            }
+                                        );
+                                }
+                            }
+                        );
+                }
             }
+
+
+            // =================================
+            // UI
+            // =================================
 
             if (videoPlaceholder) {
 
@@ -819,6 +1367,7 @@ async function createPeerConnection() {
                 );
             }
 
+
             if (liveBadge) {
 
                 liveBadge.classList.remove(
@@ -826,11 +1375,13 @@ async function createPeerConnection() {
                 );
             }
 
+
             if (mediaStatus) {
 
                 mediaStatus.textContent =
                     "LIVE";
             }
+
 
             if (responderStatus) {
 
@@ -838,24 +1389,14 @@ async function createPeerConnection() {
                     "Live emergency stream";
             }
 
+
             if (resolveButton) {
 
-                resolveButton.disabled = false;
-            }
-
-            if (remoteVideo) {
-
-                remoteVideo
-                    .play()
-                    .catch(error => {
-
-                        console.warn(
-                            "⚠️ Autoplay prevented:",
-                            error
-                        );
-                    });
+                resolveButton.disabled =
+                    false;
             }
         };
+
 
     // =================================
     // ICE
@@ -872,6 +1413,7 @@ async function createPeerConnection() {
                 return;
             }
 
+
             socket.emit(
                 "webrtc-ice-candidate",
                 {
@@ -880,10 +1422,12 @@ async function createPeerConnection() {
                 }
             );
 
+
             console.log(
                 "🧊 RESPONDER ICE SENT"
             );
         };
+
 
     // =================================
     // CONNECTION STATE
@@ -893,18 +1437,28 @@ async function createPeerConnection() {
         () => {
 
             if (!peerConnection) {
+
                 return;
             }
 
+
             const state =
                 peerConnection.connectionState;
+
 
             console.log(
                 "RESPONDER WEBRTC STATE:",
                 state
             );
 
-            if (state === "connecting") {
+
+            // =================================
+            // CONNECTING
+            // =================================
+
+            if (
+                state === "connecting"
+            ) {
 
                 if (responderStatus) {
 
@@ -913,7 +1467,14 @@ async function createPeerConnection() {
                 }
             }
 
-            if (state === "connected") {
+
+            // =================================
+            // CONNECTED
+            // =================================
+
+            if (
+                state === "connected"
+            ) {
 
                 if (responderStatus) {
 
@@ -921,23 +1482,34 @@ async function createPeerConnection() {
                         "Live connection active";
                 }
 
+
                 if (mediaStatus) {
 
                     mediaStatus.textContent =
                         "LIVE";
                 }
 
+
                 if (resolveButton) {
 
-                    resolveButton.disabled = false;
+                    resolveButton.disabled =
+                        false;
                 }
+
 
                 console.log(
                     "🟢 AUTHORIZED WEBRTC CONNECTED"
                 );
             }
 
-            if (state === "disconnected") {
+
+            // =================================
+            // DISCONNECTED
+            // =================================
+
+            if (
+                state === "disconnected"
+            ) {
 
                 if (responderStatus) {
 
@@ -946,7 +1518,14 @@ async function createPeerConnection() {
                 }
             }
 
-            if (state === "failed") {
+
+            // =================================
+            // FAILED
+            // =================================
+
+            if (
+                state === "failed"
+            ) {
 
                 if (responderStatus) {
 
@@ -954,18 +1533,27 @@ async function createPeerConnection() {
                         "WebRTC connection failed";
                 }
 
+
                 if (mediaStatus) {
 
                     mediaStatus.textContent =
                         "Connection failed";
                 }
 
+
                 console.error(
                     "❌ WEBRTC CONNECTION FAILED"
                 );
             }
 
-            if (state === "closed") {
+
+            // =================================
+            // CLOSED
+            // =================================
+
+            if (
+                state === "closed"
+            ) {
 
                 if (responderStatus) {
 
@@ -975,6 +1563,7 @@ async function createPeerConnection() {
             }
         };
 }
+
 
 // =====================================
 // LIVE LOCATION
@@ -1002,6 +1591,7 @@ socket.on(
             return;
         }
 
+
         if (
             locationSOSId &&
             String(locationSOSId) !==
@@ -1015,11 +1605,13 @@ socket.on(
             return;
         }
 
+
         const lat =
             Number(latitude);
 
         const lng =
             Number(longitude);
+
 
         if (
             !Number.isFinite(lat) ||
@@ -1028,6 +1620,7 @@ socket.on(
 
             return;
         }
+
 
         if (
             lat < -90 ||
@@ -1039,11 +1632,13 @@ socket.on(
             return;
         }
 
+
         console.log(
             "📍 AUTHORIZED LIVE LOCATION:",
             lat,
             lng
         );
+
 
         if (coordinates) {
 
@@ -1051,14 +1646,17 @@ socket.on(
                 `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
         }
 
+
         if (locationStatus) {
 
             locationStatus.textContent =
                 "LIVE";
         }
 
+
         const mapsURL =
             `https://www.google.com/maps?q=${lat},${lng}`;
+
 
         if (mapLink) {
 
@@ -1072,20 +1670,26 @@ socket.on(
     }
 );
 
+
 // =====================================
 // SOS STATUS
 // =====================================
 
 socket.on(
     "sos-status",
-    ({ status } = {}) => {
+    ({
+        status
+    } = {}) => {
 
         console.log(
             "🚨 SOS STATUS:",
             status
         );
 
-        if (status === "RESOLVED") {
+
+        if (
+            status === "RESOLVED"
+        ) {
 
             finishEmergency(
                 "Emergency resolved by responder"
@@ -1094,12 +1698,10 @@ socket.on(
             return;
         }
 
+
         if (
             status === "CANCELLED"
         ) {
-
-            // Server should normally never
-            // cancel an active session from user.
 
             if (responderStatus) {
 
@@ -1109,6 +1711,7 @@ socket.on(
 
             return;
         }
+
 
         if (
             status === "USER_DISCONNECTED"
@@ -1120,6 +1723,7 @@ socket.on(
                     "Emergency user disconnected";
             }
 
+
             if (mediaStatus) {
 
                 mediaStatus.textContent =
@@ -1129,20 +1733,26 @@ socket.on(
     }
 );
 
+
 // =====================================
 // RESPONDER STATUS
 // =====================================
 
 socket.on(
     "responder-status",
-    ({ status } = {}) => {
+    ({
+        status
+    } = {}) => {
 
         console.log(
             "👮 RESPONDER STATUS:",
             status
         );
 
-        if (status === "disconnected") {
+
+        if (
+            status === "disconnected"
+        ) {
 
             if (responderStatus) {
 
@@ -1150,10 +1760,14 @@ socket.on(
                     "Responder connection interrupted";
             }
 
+
             return;
         }
 
-        if (status === "resolved") {
+
+        if (
+            status === "resolved"
+        ) {
 
             finishEmergency(
                 "Emergency resolved by responder"
@@ -1161,6 +1775,7 @@ socket.on(
         }
     }
 );
+
 
 // =====================================
 // RESOLVE EMERGENCY
@@ -1174,10 +1789,11 @@ if (resolveButton) {
     );
 }
 
+
 function resolveEmergency() {
 
     // =================================
-    // SECURITY CHECKS
+    // SECURITY
     // =================================
 
     if (!sessionAuthorized) {
@@ -1189,6 +1805,7 @@ function resolveEmergency() {
         return;
     }
 
+
     if (!sosId) {
 
         console.warn(
@@ -1198,24 +1815,30 @@ function resolveEmergency() {
         return;
     }
 
+
     if (!emergencyActive) {
 
         return;
     }
+
 
     const confirmed =
         confirm(
             "Are you sure you want to resolve this emergency?"
         );
 
+
     if (!confirmed) {
+
         return;
     }
+
 
     console.log(
         "📤 AUTHORIZED SOS RESOLVE REQUEST:",
         sosId
     );
+
 
     if (resolveButton) {
 
@@ -1223,23 +1846,19 @@ function resolveEmergency() {
             true;
     }
 
+
     if (responderStatus) {
 
         responderStatus.textContent =
             "Resolving emergency...";
     }
 
-    // =================================
-    // IMPORTANT
-    //
-    // Server validates the responder.
-    // We do NOT send sos-status here.
-    // =================================
 
     socket.emit(
         "sos-resolve"
     );
 }
+
 
 // =====================================
 // FINISH EMERGENCY
@@ -1253,9 +1872,22 @@ function finishEmergency(
         "✅ EMERGENCY FINISHED"
     );
 
+
     emergencyActive = false;
+
     joined = false;
+
     sessionAuthorized = false;
+
+
+    // =================================
+    // CLEAR WEBRTC QUEUES
+    // =================================
+
+    pendingOffer = null;
+
+    pendingIceCandidates = [];
+
 
     // =================================
     // STOP REMOTE MEDIA
@@ -1269,25 +1901,41 @@ function finishEmergency(
         remoteVideo
             .srcObject
             .getTracks()
-            .forEach(track => {
+            .forEach(
+                track => {
 
-                track.stop();
-            });
+                    track.stop();
+                }
+            );
+
 
         remoteVideo.srcObject =
             null;
     }
 
+
     // =================================
-    // CLOSE PEER CONNECTION
+    // CLOSE PEER
     // =================================
 
     if (peerConnection) {
 
-        peerConnection.close();
+        try {
+
+            peerConnection.close();
+
+        } catch (error) {
+
+            console.warn(
+                "⚠️ PEER CLOSE ERROR:",
+                error
+            );
+        }
+
 
         peerConnection = null;
     }
+
 
     // =================================
     // UI
@@ -1300,6 +1948,7 @@ function finishEmergency(
         );
     }
 
+
     if (liveBadge) {
 
         liveBadge.classList.add(
@@ -1307,11 +1956,13 @@ function finishEmergency(
         );
     }
 
+
     if (mediaStatus) {
 
         mediaStatus.textContent =
             "Ended";
     }
+
 
     if (locationStatus) {
 
@@ -1319,26 +1970,32 @@ function finishEmergency(
             "Emergency ended";
     }
 
+
     if (coordinates) {
 
         coordinates.textContent =
             "Emergency session ended";
     }
 
+
     if (mapLink) {
 
-        mapLink.removeAttribute("href");
+        mapLink.removeAttribute(
+            "href"
+        );
 
         mapLink.classList.add(
             "disabled"
         );
     }
 
+
     if (resolveButton) {
 
         resolveButton.disabled =
             true;
     }
+
 
     if (sosIndicator) {
 
@@ -1347,11 +2004,13 @@ function finishEmergency(
         );
     }
 
+
     if (sosTitle) {
 
         sosTitle.textContent =
             "Emergency Resolved";
     }
+
 
     if (responderStatus) {
 
@@ -1359,14 +2018,16 @@ function finishEmergency(
             message;
     }
 
+
     // =================================
-    // Clear current session
+    // CLEAR SESSION
     // =================================
 
     sosId = null;
 
+
     // =================================
-    // Return to waiting state
+    // WAITING STATE
     // =================================
 
     if (joinPanel) {
@@ -1376,6 +2037,7 @@ function finishEmergency(
         );
     }
 
+
     if (activeSession) {
 
         activeSession.classList.add(
@@ -1383,11 +2045,14 @@ function finishEmergency(
         );
     }
 
+
     if (sosIdInput) {
 
-        sosIdInput.value = "";
+        sosIdInput.value =
+            "";
     }
 }
+
 
 // =====================================
 // PAGE ERROR PROTECTION
@@ -1397,14 +2062,17 @@ window.addEventListener(
     "beforeunload",
     () => {
 
-        if (
-            peerConnection
-        ) {
+        if (peerConnection) {
 
             peerConnection.close();
         }
     }
 );
+
+
+// =====================================
+// APP LOADED
+// =====================================
 
 console.log(
     "🛡️ SECURE RESPONDER APP LOADED"
