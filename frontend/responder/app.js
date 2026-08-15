@@ -1,5 +1,4 @@
 const socket = io("https://sos-guardian-backend.onrender.com");
-
 let sosId = null;
 let peerConnection = null;
 
